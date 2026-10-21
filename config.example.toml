@@ -1,10 +1,10 @@
-# Copier vers le fichier de configuration (voir le README : ~/.config/mail-mcp/config.toml,
-# ou %APPDATA%\mail-mcp\config.toml sous Windows) ou pointer MAIL_MCP_CONFIG dessus.
-# Les secrets ne vont jamais ici : ils sont lus dans le trousseau du système
-# (service "mail-mcp", identifiant = nom du compte), voir `mail-mcp set-secret`.
+# Copy to the configuration file (see the README: ~/.config/mail-mcp/config.toml,
+# or %APPDATA%\mail-mcp\config.toml on Windows), or point MAIL_MCP_CONFIG at it.
+# Secrets never go here: they are read from the system keychain
+# (service "mail-mcp", username = account name), see `mail-mcp set-secret`.
 #
-# Tous les comptes sont en lecture seule. Pour autoriser des écritures, lister
-# les capacités voulues dans `allow` (permises : "draft", "archive").
+# Every account is read-only. To allow writes, list the wanted capabilities
+# in `allow` (permitted: "draft", "archive").
 
 [accounts.gmail]
 backend = "imap"
@@ -12,7 +12,7 @@ host = "imap.gmail.com"
 port = 993
 security = "ssl"            # ssl | starttls
 username = "you@gmail.com"
-allow = ["draft", "archive"]   # optionnel
+allow = ["draft", "archive"]   # optional
 
 [accounts.school]
 backend = "imap"
@@ -21,6 +21,6 @@ port = 993
 security = "ssl"
 username = "you@example.edu"
 allow = ["draft"]
-# address = "you@example.edu"     # expéditeur des brouillons si différent de username
-# drafts_folder = "Drafts"        # sinon détecté (attribut \Drafts ou nom usuel)
-# archive_folder = "Archive"      # requis si le serveur n'a pas de dossier d'archive reconnu
+# address = "you@example.edu"     # sender of drafts if different from username
+# drafts_folder = "Drafts"        # otherwise detected (\Drafts attribute or usual name)
+# archive_folder = "Archive"      # required if the server has no recognised archive folder

@@ -1,22 +1,24 @@
 # mail-mcp
 
-Serveur [MCP](https://modelcontextprotocol.io) local qui donne à un assistant (Claude Code, par exemple)
-un accès à plusieurs boîtes mail, **en lecture seule par défaut**.
+**English** | [Français](LISEZMOI.md)
 
-- Plusieurs comptes, un format de sortie unique (compte, id, expéditeur, sujet, date, non lu, extrait).
-- Les secrets restent dans le trousseau du système (macOS Keychain, Windows Credential Manager, Secret Service
-  sous Linux), jamais dans un fichier ni dans le dépôt.
-- Les écritures (brouillon, archivage) sont des capacités distinctes, désactivées par défaut,
-  activées compte par compte dans la configuration, jamais par un argument d'outil.
-- Le contenu des mails est traité comme une donnée non fiable, et chaque sortie d'outil le signale.
+A local [MCP](https://modelcontextprotocol.io) server that gives an assistant (Claude Code, for example) access
+to several mailboxes, **read-only by default**.
 
-État actuel : backend IMAP (Gmail et serveurs IMAP à mot de passe). Prévus : Gmail API, Microsoft Graph
-(voir [Limites connues](#limites-connues)).
+- Several accounts, one output format (account, id, sender, subject, date, unread, snippet).
+- Secrets stay in the system keychain (macOS Keychain, Windows Credential Manager, Secret Service on Linux),
+  never in a file or in the repository.
+- Writes (drafts, archiving) are separate capabilities, off by default, enabled account by account in the
+  configuration, never through a tool argument.
+- Mail content is treated as untrusted data, and every tool output says so.
+
+Current state: IMAP backend (Gmail and any IMAP server that accepts a password). Planned: Gmail API,
+Microsoft Graph (see [Known limitations](#known-limitations)).
 
 ## Installation
 
-Prérequis : [uv](https://docs.astral.sh/uv/) et Python 3.11 ou plus. macOS, Linux et Windows sont visés ;
-voir [Limites connues](#limites-connues) pour ce qui est réellement vérifié.
+Requirements: [uv](https://docs.astral.sh/uv/) and Python 3.11 or later. macOS, Linux and Windows are targeted;
+see [Known limitations](#known-limitations) for what has actually been verified.
 
 ```
 git clone https://github.com/Raphael-Barret/mail-mcp.git
@@ -27,126 +29,126 @@ uv run pytest
 
 ## Configuration
 
-1. Copier `config.example.toml` vers le fichier de configuration (ou définir `MAIL_MCP_CONFIG`) et décrire
-   vos comptes. Une entrée `[accounts.<nom>]` suffit pour ajouter un compte. Emplacement par défaut :
+1. Copy `config.example.toml` to the configuration file (or set `MAIL_MCP_CONFIG`) and describe your accounts.
+   One `[accounts.<name>]` entry is enough to add an account. Default location:
 
-   | Système | Fichier |
+   | System | File |
    |---|---|
-   | macOS, Linux | `$XDG_CONFIG_HOME/mail-mcp/config.toml`, sinon `~/.config/mail-mcp/config.toml` |
+   | macOS, Linux | `$XDG_CONFIG_HOME/mail-mcp/config.toml`, otherwise `~/.config/mail-mcp/config.toml` |
    | Windows | `%APPDATA%\mail-mcp\config.toml` |
 
-2. Ranger le mot de passe de chaque compte dans le trousseau du système, avec une saisie masquée (rien dans
-   l'historique du shell), le nom du compte étant celui de la configuration :
+2. Store each account's password in the system keychain, typed with no echo (nothing lands in your shell
+   history). The account name is the one used in the configuration:
 
    ```
-   uv run mail-mcp set-secret <nom-du-compte>
+   uv run mail-mcp set-secret <account-name>
    ```
 
-   À lancer dans un vrai terminal, pas dans une session d'assistant.
-   - **macOS** : Keychain. Si l'erreur « User interaction is not allowed » apparaît, déverrouiller d'abord :
+   Run it in a real terminal, not inside an assistant session.
+   - **macOS**: Keychain. If you get "User interaction is not allowed", unlock it first:
      `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
-   - **Windows** : Credential Manager, rien à installer.
-   - **Linux** : il faut un service Secret Service actif et déverrouillé (gnome-keyring ou KWallet). Sans lui
-     (serveur sans interface graphique), l'enregistrement échoue avec un message explicite.
-3. Redémarrer le serveur après chaque changement de configuration (elle est lue au démarrage).
+   - **Windows**: Credential Manager, nothing to install.
+   - **Linux**: a running, unlocked Secret Service (gnome-keyring or KWallet) is required. Without one (a
+     headless server, for instance), storing the secret fails with an explicit message.
+3. Restart the server after every configuration change (it is read at startup).
 
 ### Gmail
 
-Activer la validation en deux étapes, puis créer un **mot de passe d'application** sur
-<https://myaccount.google.com/apppasswords>. C'est lui qu'on range dans le trousseau. Hôte `imap.gmail.com`,
-port 993, `security = "ssl"`. Chez Gmail, archiver retire le message du dossier INBOX : il reste dans
-« Tous les messages » (vérifié avant de le retirer).
+Turn on 2-step verification, then create an **app password** at <https://myaccount.google.com/apppasswords>.
+That is what goes in the keychain. Host `imap.gmail.com`, port 993, `security = "ssl"`. On Gmail, archiving
+removes the message from INBOX: it stays in "All Mail" (checked before it is removed).
 
-### Autre serveur IMAP (école, entreprise)
+### Another IMAP server (school, company)
 
-Les paramètres sont souvent publiés dans un fichier d'autoconfiguration :
-`https://autoconfig.<domaine>/mail/config-v1.1.xml` (hôte, port, sécurité, forme de l'identifiant).
-Sinon, les lire dans les réglages du compte de votre client mail. Pour archiver sur un serveur sans dossier
-d'archive reconnu, créer le dossier dans votre client et le nommer dans `archive_folder`.
+The settings are often published in an autoconfiguration file:
+`https://autoconfig.<domain>/mail/config-v1.1.xml` (host, port, security, username format). Otherwise, read
+them from your mail client's account settings. To archive on a server with no recognised archive folder, create
+the folder in your mail client and name it in `archive_folder`.
 
-### Ajouter un compte
+### Adding an account
 
-Un compte, c'est quatre lignes de configuration et un mot de passe dans le trousseau : aucun code à écrire.
+An account is four lines of configuration and a password in the keychain: no code to write.
 
 ```toml
-[accounts.ecole]
+[accounts.school]
 backend = "imap"
-host = "imap.exemple.edu"
+host = "imap.example.edu"
 port = 993
 security = "ssl"
-username = "prenom.nom@exemple.edu"
+username = "first.last@example.edu"
 ```
 
-Ça marche pour tout serveur IMAP qui accepte un mot de passe (Dovecot, Zimbra, Cyrus, serveurs d'école ou
-d'entreprise). Ça ne marche **pas** quand l'établissement est sur Microsoft 365 ou Google Workspace avec
-l'authentification par mot de passe désactivée : il faut alors OAuth, que ce serveur ne gère pas encore.
-## Enregistrement dans Claude Code
+This works for any IMAP server that accepts a password (Dovecot, Zimbra, Cyrus, school and company servers).
+It does **not** work when the organisation is on Microsoft 365 or Google Workspace with password authentication
+turned off: that requires OAuth, which this server does not handle yet.
+
+## Registering in Claude Code
 
 ```
-claude mcp add --scope user mail -- uv run --directory /chemin/vers/mail-mcp mail-mcp
+claude mcp add --scope user mail -- uv run --directory /path/to/mail-mcp mail-mcp
 ```
 
-Sous Windows, donner le chemin Windows du dossier (`C:\chemin\vers\mail-mcp`).
+On Windows, give the Windows path of the folder (`C:\path\to\mail-mcp`).
 
-La portée `user` garde la déclaration hors du dépôt. Relancer Claude Code, puis `/mcp` doit montrer `mail`.
+The `user` scope keeps the declaration out of the repository. Restart Claude Code; `/mcp` should then list
+`mail`.
 
-## Outils
+## Tools
 
-| Outil | Effet | Disponible |
+| Tool | Effect | Available |
 |---|---|---|
-| `list_accounts` | comptes configurés et capacités d'écriture | toujours |
-| `list_messages` | derniers messages d'un dossier | toujours |
-| `search_messages` | recherche plein texte | toujours |
-| `read_message` | lit un message | toujours |
-| `read_thread` | lit le fil (par `Message-ID` et `References`, dossier courant) | toujours |
-| `create_draft` | crée un brouillon, **sans l'envoyer** ; peut répondre à un message | si un compte a `allow = ["draft"]` |
-| `archive_message` | sort un message de la boîte de réception, sans le supprimer | si un compte a `allow = ["archive"]` |
+| `list_accounts` | configured accounts and their write capabilities | always |
+| `list_messages` | latest messages of a folder | always |
+| `search_messages` | full-text search | always |
+| `read_message` | reads one message | always |
+| `read_thread` | reads the thread (by `Message-ID` and `References`, current folder) | always |
+| `create_draft` | creates a draft, **without sending it**; can reply to a message | if an account has `allow = ["draft"]` |
+| `archive_message` | takes a message out of the inbox without deleting it | if an account has `allow = ["archive"]` |
 
-Chaque appel d'écriture revérifie la configuration du compte visé. Il n'existe pas d'outil pour envoyer ni
-supprimer.
+Every write call re-checks the configuration of the targeted account. There is no tool to send or delete.
 
-## Modèle de sécurité
+## Security model
 
-- **Lecture seule vérifiable.** La connexion de lecture n'ouvre les dossiers qu'avec `EXAMINE` et lit avec
-  `BODY.PEEK` : rien n'est marqué comme lu. Elle n'a aucune commande d'écriture, et un test le prouve.
-- **Écriture limitée.** La connexion d'écriture est une classe à part. Elle ne sait faire que : ajouter un
-  brouillon, déplacer un message, ou retirer un seul message du dossier courant une fois qu'il existe
-  ailleurs (copie réussie, ou présence vérifiée dans « Tous les messages » chez Gmail). Elle refuse si un
-  autre message du dossier est déjà marqué supprimé. Aucun chemin de code ne supprime un message qui n'existe pas ailleurs.
-- **Brouillon, jamais envoi.** Un brouillon part dans le dossier Brouillons ; c'est vous qui l'envoyez.
-  Les adresses et l'objet sont refusés s'ils contiennent un saut de ligne (injection d'en-têtes).
-- **Contenu non fiable.** Un mail peut contenir des instructions à l'intention de l'assistant. Les sorties de
-  lecture sont enveloppées dans un avertissement, mais la défense reste côté usage : ne pas mettre les outils
-  d'écriture en autorisation automatique, relire les brouillons.
-- **Les identifiants ne sont pas limités.** Un mot de passe d'application ou un mot de passe de compte donne
-  tous les droits côté serveur. La lecture seule ne tient que par ce code et votre configuration.
+- **Verifiable read-only.** The read connection opens folders with `EXAMINE` only and reads with `BODY.PEEK`:
+  nothing is marked as read. It has no write command, and a test proves it.
+- **Limited writes.** The write connection is a separate class. It can only: append a draft, move a message, or
+  remove a single message from the current folder once it exists elsewhere (a successful copy, or presence
+  verified in "All Mail" on Gmail). It refuses if another message in the folder is already flagged as deleted.
+  No code path deletes a message that does not exist elsewhere.
+- **Drafts, never sending.** A draft goes to the Drafts folder; you are the one who sends it. Addresses and
+  subject are rejected if they contain a line break (header injection).
+- **Untrusted content.** A mail can contain instructions aimed at the assistant. Read outputs are wrapped in a
+  warning, but the real defence is in how you use it: do not auto-approve the write tools, and review drafts.
+- **Credentials are not scoped.** An app password or an account password grants full rights on the server side.
+  Read-only holds only because of this code and your configuration.
 
-## Limites connues
+## Known limitations
 
-- **Microsoft 365 et Google Workspace sans mot de passe IMAP** : non supportés (OAuth requis). Les backends
-  Gmail API et Graph sont prévus, pas écrits.
-- **Vérifié en réel** : lecture, recherche, brouillon et archivage sur Gmail ; lecture et brouillon sur un
-  serveur d'école. Le chemin d'archivage pour un serveur sans `MOVE` (copie puis retrait) n'est couvert que
-  par des tests avec fausse connexion IMAP.
-- **Systèmes** : macOS utilisé au quotidien. Linux : tests et démarrage du serveur MCP vérifiés dans un conteneur
-  (Python 3.11, 3.12, 3.13), mais sans comptes réels ni trousseau graphique. Windows : couvert par la CI
-  (`.github/workflows/ci.yml`), jamais essayé avec un vrai compte.
-- **Recherche** : texte intégral (`TEXT`), floue chez Gmail ; pas de syntaxe de recherche propre à Gmail.
-- **Fils de discussion** : reconstitués dans le dossier courant seulement.
-- **Brouillons** : texte brut, sans pièce jointe. Pas d'envoi ni de suppression, par choix.
-- **Noms de dossier** : ceux détectés par le serveur fonctionnent ; un nom saisi à la main avec des accents
-  doit être donné dans l'encodage IMAP (UTF-7 modifié).
-- **Pièces jointes** : non lues.
+- **Microsoft 365 and Google Workspace without IMAP passwords**: not supported (OAuth required). The Gmail API
+  and Graph backends are planned, not written.
+- **Verified against real accounts**: reading, searching, drafting and archiving on Gmail; reading and drafting
+  on a school server. The archiving path for a server without `MOVE` (copy, then removal) is covered only by
+  tests with a fake IMAP connection.
+- **Systems**: macOS is used daily. Linux: tests and MCP server startup verified in a container (Python 3.11,
+  3.12, 3.13), but with no real accounts and no graphical keychain. Windows: covered by CI
+  (`.github/workflows/ci.yml`), never tried with a real account.
+- **Search**: full text (`TEXT`), fuzzy on Gmail; no Gmail-specific search syntax.
+- **Threads**: rebuilt within the current folder only.
+- **Drafts**: plain text, no attachments. No sending and no deletion, by design.
+- **Folder names**: names detected from the server work; a name typed by hand with accented characters must be
+  given in IMAP encoding (modified UTF-7).
+- **Attachments**: not read.
+- **Language**: messages returned by the tools, code comments and docstrings are in French.
 
-## Développement
+## Development
 
 ```
 uv run pytest
 ```
 
-Ajouter un backend : implémenter `MailBackend` (et `DraftingBackend` / `ArchivingBackend` s'il écrit), puis
-l'enregistrer dans `mail_mcp.registry.BACKENDS`.
+To add a backend: implement `MailBackend` (and `DraftingBackend` / `ArchivingBackend` if it writes), then
+register it in `mail_mcp.registry.BACKENDS`.
 
-## Licence
+## License
 
-MIT, voir `LICENSE`.
+MIT, see `LICENSE`.
