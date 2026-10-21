@@ -13,7 +13,9 @@ from ..registry import BACKENDS
 from .base import MailBackend
 
 SNIPPET_LEN = 160
-PREVIEW_BYTES = 4000
+PREVIEW_BYTES = 6000
+# En-têtes lus pour un résumé : les autres (Received...) peuvent peser des Ko.
+SUMMARY_HEADERS = "FROM SUBJECT DATE MIME-VERSION CONTENT-TYPE CONTENT-TRANSFER-ENCODING"
 MAX_BODY_CHARS = 100_000
 TIMEOUT = 30
 
@@ -120,17 +122,27 @@ def _addresses(msg: EmailMessage, header: str) -> list[str]:
 
 
 def _parse_fetch(data: list) -> list[tuple[str, set[str], bytes]]:
-    """Extrait (uid, flags, octets) de chaque réponse FETCH d'imaplib."""
-    out = []
+    """Extrait (uid, flags, octets) de chaque réponse FETCH d'imaplib.
+
+    Quand une réponse contient plusieurs sections, imaplib renvoie un tuple par
+    section, dans un ordre que le serveur choisit (Gmail renvoie le corps avant
+    les en-têtes). Les sections sont rangées d'après leur étiquette et
+    recollées en-têtes d'abord ; celles sans UID se rattachent à la précédente.
+    """
+    out: list[tuple[str, set[str], bytearray, bytearray]] = []
     for item in data:
         if not isinstance(item, tuple):
             continue
         head = item[0].decode("ascii", "replace")
         uid = re.search(r"UID (\d+)", head)
-        flags = re.search(r"FLAGS \(([^)]*)\)", head)
         if uid:
-            out.append((uid.group(1), set((flags.group(1) if flags else "").split()), item[1]))
-    return out
+            flags = re.search(r"FLAGS \(([^)]*)\)", head)
+            out.append((uid.group(1), set((flags.group(1) if flags else "").split()), bytearray(), bytearray()))
+        elif not out:
+            continue
+        section = "HEADER" if "BODY[HEADER" in head else "BODY"
+        out[-1][2 if section == "HEADER" else 3].extend(item[1])
+    return [(u, f, bytes(h + b)) for u, f, h, b in out]
 
 
 class ImapBackend(MailBackend):
@@ -157,7 +169,11 @@ class ImapBackend(MailBackend):
     ) -> list[MessageSummary]:
         if not uids:
             return []
-        typ, data = c.uid("FETCH", ",".join(uids), f"(FLAGS BODY.PEEK[]<0.{PREVIEW_BYTES}>)")
+        typ, data = c.uid(
+            "FETCH",
+            ",".join(uids),
+            f"(FLAGS BODY.PEEK[HEADER.FIELDS ({SUMMARY_HEADERS})] BODY.PEEK[TEXT]<0.{PREVIEW_BYTES}>)",
+        )
         if typ != "OK":
             raise RuntimeError("FETCH refusé")
         by_uid = {}

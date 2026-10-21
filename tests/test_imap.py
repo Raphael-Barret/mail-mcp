@@ -92,3 +92,15 @@ def test_write_commands_do_not_exist():
 
 def test_backend_registered():
     assert imap_mod.BACKENDS["imap"] is ImapBackend
+
+
+def test_parse_fetch_merges_split_literals():
+    hdr, body = RAW.split(b"\r\n\r\n", 1)
+    # Gmail renvoie le corps avant les en-têtes
+    data = [
+        (b"7 (UID 9 FLAGS (\\Seen) BODY[TEXT]<0> {1}", body),
+        (b" BODY[HEADER.FIELDS (FROM)] {1}", hdr + b"\r\n\r\n"),
+        b")",
+    ]
+    (uid, flags, raw), = imap_mod._parse_fetch(data)
+    assert (uid, flags, raw) == ("9", {"\\Seen"}, RAW)
