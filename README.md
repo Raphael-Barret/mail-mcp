@@ -9,14 +9,16 @@ un accès à plusieurs boîtes mail, **en lecture seule par défaut**.
   activées compte par compte dans la configuration, jamais par un argument d'outil.
 - Le contenu des mails est traité comme une donnée non fiable, et chaque sortie d'outil le signale.
 
-État actuel : backend IMAP (Gmail, tout serveur IMAP classique). Prévus : Gmail API, Microsoft Graph.
+État actuel : backend IMAP (Gmail et serveurs IMAP à mot de passe). Prévus : Gmail API, Microsoft Graph
+(voir [Limites connues](#limites-connues)).
 
 ## Installation
 
-Prérequis : macOS (Trousseau), [uv](https://docs.astral.sh/uv/), Python 3.11 ou plus.
+Prérequis : [uv](https://docs.astral.sh/uv/) et Python 3.11 ou plus. Testé sur macOS (Trousseau) ; la
+bibliothèque `keyring` gère d'autres systèmes, non testés ici.
 
 ```
-git clone <url-du-depot> mail-mcp
+git clone https://github.com/Raphael-Barret/mail-mcp.git
 cd mail-mcp
 uv sync
 uv run pytest
@@ -51,6 +53,22 @@ Les paramètres sont souvent publiés dans un fichier d'autoconfiguration :
 Sinon, les lire dans les réglages du compte de votre client mail. Pour archiver sur un serveur sans dossier
 d'archive reconnu, créer le dossier dans votre client et le nommer dans `archive_folder`.
 
+### Ajouter un compte
+
+Un compte, c'est quatre lignes de configuration et un mot de passe dans le Trousseau : aucun code à écrire.
+
+```toml
+[accounts.ecole]
+backend = "imap"
+host = "imap.exemple.edu"
+port = 993
+security = "ssl"
+username = "prenom.nom@exemple.edu"
+```
+
+Ça marche pour tout serveur IMAP qui accepte un mot de passe (Dovecot, Zimbra, Cyrus, serveurs d'école ou
+d'entreprise). Ça ne marche **pas** quand l'établissement est sur Microsoft 365 ou Google Workspace avec
+l'authentification par mot de passe désactivée : il faut alors OAuth, que ce serveur ne gère pas encore.
 ## Enregistrement dans Claude Code
 
 ```
@@ -81,7 +99,7 @@ supprimer.
 - **Écriture limitée.** La connexion d'écriture est une classe à part. Elle ne sait faire que : ajouter un
   brouillon, déplacer un message, ou retirer un seul message du dossier courant une fois qu'il existe
   ailleurs (copie réussie, ou présence vérifiée dans « Tous les messages » chez Gmail). Elle refuse si un
-  autre message du dossier est déjà marqué supprimé. Un message n'est jamais détruit.
+  autre message du dossier est déjà marqué supprimé. Aucun chemin de code ne supprime un message qui n'existe pas ailleurs.
 - **Brouillon, jamais envoi.** Un brouillon part dans le dossier Brouillons ; c'est vous qui l'envoyez.
   Les adresses et l'objet sont refusés s'ils contiennent un saut de ligne (injection d'en-têtes).
 - **Contenu non fiable.** Un mail peut contenir des instructions à l'intention de l'assistant. Les sorties de
@@ -89,6 +107,20 @@ supprimer.
   d'écriture en autorisation automatique, relire les brouillons.
 - **Les identifiants ne sont pas limités.** Un mot de passe d'application ou un mot de passe de compte donne
   tous les droits côté serveur. La lecture seule ne tient que par ce code et votre configuration.
+
+## Limites connues
+
+- **Microsoft 365 et Google Workspace sans mot de passe IMAP** : non supportés (OAuth requis). Les backends
+  Gmail API et Graph sont prévus, pas écrits.
+- **Vérifié en réel** : lecture, recherche, brouillon et archivage Gmail sur Gmail ; lecture et brouillon sur un
+  serveur d'école. Le chemin d'archivage pour un serveur sans `MOVE` (copie puis retrait) n'est couvert que
+  par des tests avec fausse connexion IMAP.
+- **Recherche** : texte intégral (`TEXT`), floue chez Gmail ; pas de syntaxe de recherche propre à Gmail.
+- **Fils de discussion** : reconstitués dans le dossier courant seulement.
+- **Brouillons** : texte brut, sans pièce jointe. Pas d'envoi ni de suppression, par choix.
+- **Noms de dossier** : ceux détectés par le serveur fonctionnent ; un nom saisi à la main avec des accents
+  doit être donné dans l'encodage IMAP (UTF-7 modifié).
+- **Pièces jointes** : non lues.
 
 ## Développement
 
