@@ -47,7 +47,16 @@ def main(argv: list[str] | None = None) -> int:
         return set_secret(args.account)
     from .server import create_server
 
-    create_server(load_accounts()).run()
+    try:
+        accounts = load_accounts()
+    except FileNotFoundError:
+        print(
+            f"Config introuvable : {config_path()}. Copier config.example.toml à cet endroit "
+            "(ou définir MAIL_MCP_CONFIG).",
+            file=sys.stderr,
+        )
+        return 1
+    create_server(accounts).run()
     return 0
 
 

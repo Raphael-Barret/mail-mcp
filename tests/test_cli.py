@@ -88,3 +88,9 @@ def test_default_config_path_per_platform(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_CONFIG_HOME")
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     assert default_config_path() == tmp_path / "home" / ".config" / "mail-mcp" / "config.toml"
+
+
+def test_serve_without_config_exits_with_a_clear_message(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("MAIL_MCP_CONFIG", str(tmp_path / "absent.toml"))
+    assert cli.main([]) == 1
+    assert "Config introuvable" in capsys.readouterr().err
