@@ -1,6 +1,7 @@
-# Copier vers ~/.config/mail-mcp/config.toml (ou pointer MAIL_MCP_CONFIG dessus).
-# Les secrets ne vont jamais ici : ils sont lus dans le Trousseau macOS
-# (service "mail-mcp", identifiant = nom du compte).
+# Copier vers le fichier de configuration (voir le README : ~/.config/mail-mcp/config.toml,
+# ou %APPDATA%\mail-mcp\config.toml sous Windows) ou pointer MAIL_MCP_CONFIG dessus.
+# Les secrets ne vont jamais ici : ils sont lus dans le trousseau du système
+# (service "mail-mcp", identifiant = nom du compte), voir `mail-mcp set-secret`.
 #
 # Tous les comptes sont en lecture seule. Pour autoriser des écritures, lister
 # les capacités voulues dans `allow` (permises : "draft", "archive").

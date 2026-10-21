@@ -4,7 +4,8 @@ Serveur [MCP](https://modelcontextprotocol.io) local qui donne à un assistant (
 un accès à plusieurs boîtes mail, **en lecture seule par défaut**.
 
 - Plusieurs comptes, un format de sortie unique (compte, id, expéditeur, sujet, date, non lu, extrait).
-- Les secrets restent dans le Trousseau macOS, jamais dans un fichier ni dans le dépôt.
+- Les secrets restent dans le trousseau du système (macOS Keychain, Windows Credential Manager, Secret Service
+  sous Linux), jamais dans un fichier ni dans le dépôt.
 - Les écritures (brouillon, archivage) sont des capacités distinctes, désactivées par défaut,
   activées compte par compte dans la configuration, jamais par un argument d'outil.
 - Le contenu des mails est traité comme une donnée non fiable, et chaque sortie d'outil le signale.
@@ -14,8 +15,8 @@ un accès à plusieurs boîtes mail, **en lecture seule par défaut**.
 
 ## Installation
 
-Prérequis : [uv](https://docs.astral.sh/uv/) et Python 3.11 ou plus. Testé sur macOS (Trousseau) ; la
-bibliothèque `keyring` gère d'autres systèmes, non testés ici.
+Prérequis : [uv](https://docs.astral.sh/uv/) et Python 3.11 ou plus. macOS, Linux et Windows sont visés ;
+voir [Limites connues](#limites-connues) pour ce qui est réellement vérifié.
 
 ```
 git clone https://github.com/Raphael-Barret/mail-mcp.git
@@ -26,23 +27,33 @@ uv run pytest
 
 ## Configuration
 
-1. Copier `config.example.toml` vers `~/.config/mail-mcp/config.toml` (ou définir `MAIL_MCP_CONFIG`)
-   et décrire vos comptes. Une entrée `[accounts.<nom>]` suffit pour ajouter un compte.
-2. Ranger le mot de passe de chaque compte dans le Trousseau, **dans un vrai terminal** (pas en argument,
-   pour qu'il ne finisse pas dans l'historique du shell), avec le nom du compte comme identifiant :
+1. Copier `config.example.toml` vers le fichier de configuration (ou définir `MAIL_MCP_CONFIG`) et décrire
+   vos comptes. Une entrée `[accounts.<nom>]` suffit pour ajouter un compte. Emplacement par défaut :
+
+   | Système | Fichier |
+   |---|---|
+   | macOS, Linux | `$XDG_CONFIG_HOME/mail-mcp/config.toml`, sinon `~/.config/mail-mcp/config.toml` |
+   | Windows | `%APPDATA%\mail-mcp\config.toml` |
+
+2. Ranger le mot de passe de chaque compte dans le trousseau du système, avec une saisie masquée (rien dans
+   l'historique du shell), le nom du compte étant celui de la configuration :
 
    ```
-   security add-generic-password -s mail-mcp -a <nom-du-compte> -w
+   uv run mail-mcp set-secret <nom-du-compte>
    ```
 
-   Si macOS répond « User interaction is not allowed », déverrouiller d'abord le Trousseau :
-   `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
+   À lancer dans un vrai terminal, pas dans une session d'assistant.
+   - **macOS** : Keychain. Si l'erreur « User interaction is not allowed » apparaît, déverrouiller d'abord :
+     `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
+   - **Windows** : Credential Manager, rien à installer.
+   - **Linux** : il faut un service Secret Service actif et déverrouillé (gnome-keyring ou KWallet). Sans lui
+     (serveur sans interface graphique), l'enregistrement échoue avec un message explicite.
 3. Redémarrer le serveur après chaque changement de configuration (elle est lue au démarrage).
 
 ### Gmail
 
 Activer la validation en deux étapes, puis créer un **mot de passe d'application** sur
-<https://myaccount.google.com/apppasswords>. C'est lui qu'on range dans le Trousseau. Hôte `imap.gmail.com`,
+<https://myaccount.google.com/apppasswords>. C'est lui qu'on range dans le trousseau. Hôte `imap.gmail.com`,
 port 993, `security = "ssl"`. Chez Gmail, archiver retire le message du dossier INBOX : il reste dans
 « Tous les messages » (vérifié avant de le retirer).
 
@@ -55,7 +66,7 @@ d'archive reconnu, créer le dossier dans votre client et le nommer dans `archiv
 
 ### Ajouter un compte
 
-Un compte, c'est quatre lignes de configuration et un mot de passe dans le Trousseau : aucun code à écrire.
+Un compte, c'est quatre lignes de configuration et un mot de passe dans le trousseau : aucun code à écrire.
 
 ```toml
 [accounts.ecole]
@@ -74,6 +85,8 @@ l'authentification par mot de passe désactivée : il faut alors OAuth, que ce s
 ```
 claude mcp add --scope user mail -- uv run --directory /chemin/vers/mail-mcp mail-mcp
 ```
+
+Sous Windows, donner le chemin Windows du dossier (`C:\chemin\vers\mail-mcp`).
 
 La portée `user` garde la déclaration hors du dépôt. Relancer Claude Code, puis `/mcp` doit montrer `mail`.
 

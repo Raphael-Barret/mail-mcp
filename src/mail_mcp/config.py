@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 import keyring
+import keyring.errors
 
 KEYRING_SERVICE = "mail-mcp"
 # Capacités d'écriture activables par compte (`allow`). Aucune par défaut.
 CAPABILITIES = frozenset({"draft", "archive"})
-DEFAULT_PATH = Path.home() / ".config" / "mail-mcp" / "config.toml"
 
 
 @dataclass(frozen=True)
@@ -43,17 +44,32 @@ class AccountConfig:
         return self.address or self.username
 
     def secret(self) -> str:
-        value = keyring.get_password(KEYRING_SERVICE, self.name)
+        try:
+            value = keyring.get_password(KEYRING_SERVICE, self.name)
+        except keyring.errors.KeyringError as e:
+            raise RuntimeError(
+                f"Trousseau indisponible ({e}). Sous Linux, un service Secret Service "
+                "(gnome-keyring, KWallet) doit tourner et être déverrouillé."
+            ) from e
         if value is None:
             raise RuntimeError(
-                f"Aucun secret dans le Trousseau pour le compte '{self.name}' "
-                f"(service '{KEYRING_SERVICE}')"
+                f"Aucun secret dans le trousseau pour le compte '{self.name}' "
+                f"(service '{KEYRING_SERVICE}') : `mail-mcp set-secret {self.name}`"
             )
         return value
 
 
+def default_config_path() -> Path:
+    """%APPDATA% sous Windows, sinon $XDG_CONFIG_HOME ou ~/.config (macOS compris)."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    else:
+        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return base / "mail-mcp" / "config.toml"
+
+
 def config_path() -> Path:
-    return Path(os.environ.get("MAIL_MCP_CONFIG", DEFAULT_PATH))
+    return Path(os.environ.get("MAIL_MCP_CONFIG") or default_config_path())
 
 
 def load_accounts(path: Path | None = None) -> dict[str, AccountConfig]:

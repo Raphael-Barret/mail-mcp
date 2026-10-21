@@ -101,11 +101,3 @@ def create_server(accounts: dict[str, AccountConfig]) -> MCPServer:
             return b.archive(message_id)
 
     return mcp
-
-
-def main() -> None:
-    create_server(load_accounts()).run()
-
-
-if __name__ == "__main__":
-    main()
