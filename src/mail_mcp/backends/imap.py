@@ -70,10 +70,11 @@ class ReadOnlyIMAP:
 class WriteIMAP:
     """Connexion d'écriture, distincte de ReadOnlyIMAP (qui reste inchangée).
 
-    Opérations offertes, et seulement elles : APPEND (brouillon), MOVE, retrait du
-    libellé Inbox chez Gmail, et copie suivie du retrait d'un seul UID quand le
-    serveur n'a pas MOVE. Aucun accès brut à STORE, EXPUNGE ou DELETE : un message
-    n'est jamais détruit, il change de dossier ou de libellé.
+    Opérations offertes, et seulement elles : APPEND (brouillon), MOVE, et le retrait
+    d'un seul UID du dossier courant une fois sa copie assurée ailleurs (copie
+    explicite, ou présence vérifiée dans « Tous les messages » chez Gmail). Aucun
+    accès brut à STORE, EXPUNGE ou DELETE : un message n'est jamais détruit, il
+    change de dossier.
     """
 
     def __init__(self, conn: imaplib.IMAP4):
@@ -112,11 +113,25 @@ class WriteIMAP:
         if typ != "OK":
             raise RuntimeError(f"MOVE refusé vers {dest} : {data}")
 
-    def remove_inbox_label(self, uid: str) -> None:
-        """Gmail : archiver = retirer le libellé Inbox (le message reste dans Tous les messages)."""
-        typ, data = self._c.uid("STORE", uid, "-X-GM-LABELS", "(\\Inbox)")
+    def gmail_msgid(self, uid: str) -> str:
+        typ, data = self._c.uid("FETCH", uid, "(X-GM-MSGID)")
+        m = re.search(rb"X-GM-MSGID (\d+)", data[0] if typ == "OK" and data and data[0] else b"")
+        if not m:
+            raise LookupError(f"Message introuvable : uid {uid}")
+        return m.group(1).decode()
+
+    def exists_in(self, folder: str, msgid: str) -> bool:
+        """Le message (X-GM-MSGID) est-il dans ce dossier ? Ouvre ce dossier en lecture seule."""
+        typ, _ = self._c.select(_quote(folder), readonly=True)
         if typ != "OK":
-            raise RuntimeError(f"Retrait du libellé Inbox refusé : {data}")
+            raise RuntimeError(f"Dossier inaccessible : {folder}")
+        typ, data = self._c.uid("SEARCH", "X-GM-MSGID", msgid)
+        return typ == "OK" and bool(data and data[0])
+
+    def others_flagged_deleted(self, uid: str) -> bool:
+        """Y a-t-il, dans le dossier courant, un autre message déjà marqué \\Deleted ?"""
+        typ, data = self._c.uid("SEARCH", "DELETED")
+        return typ == "OK" and any(u != uid.encode() for u in (data[0] or b"").split())
 
     def in_selected_folder(self, uid: str) -> bool:
         typ, data = self._c.uid("SEARCH", "UID", uid)
@@ -128,6 +143,11 @@ class WriteIMAP:
         typ, data = self._c.uid("COPY", uid, _quote(dest))
         if typ != "OK":
             raise RuntimeError(f"COPY refusé vers {dest} : {data}")
+        self.remove_from_selected(uid)
+
+    def remove_from_selected(self, uid: str) -> None:
+        """Retire CE message du dossier courant (\\Deleted puis UID EXPUNGE). À n'appeler
+        qu'une fois le message assuré ailleurs."""
         typ, data = self._c.uid("STORE", uid, "+FLAGS.SILENT", "(\\Deleted)")
         if typ != "OK":
             raise RuntimeError(f"Marquage refusé : {data}")
@@ -450,7 +470,7 @@ class ImapBackend(DraftingBackend, ArchivingBackend):
             if gmail:
                 if folder.upper() != "INBOX":
                     raise ValueError("Gmail : seul un message de INBOX peut être archivé")
-                dest = None
+                dest = self._special_folder(c, "", ("\\All",), (), "Archive")
             else:
                 if not (c.has_capability("MOVE") or c.has_capability("UIDPLUS")):
                     raise RuntimeError(
@@ -465,13 +485,8 @@ class ImapBackend(DraftingBackend, ArchivingBackend):
             if self._uidvalidity(c) != validity:
                 raise LookupError("Identifiant périmé (UIDVALIDITY a changé), relister le dossier")
             if gmail:
-                c.remove_inbox_label(uid)
-                if c.in_selected_folder(uid):
-                    raise RuntimeError(
-                        f"Gmail a accepté la commande mais le message est toujours dans {folder} : "
-                        "archivage non effectué"
-                    )
-                return "Message archivé (libellé Inbox retiré, conservé dans Tous les messages)"
+                self._gmail_archive(c, folder, uid, dest)
+                return f"Message archivé (retiré de {folder}, conservé dans {dest})"
             if c.has_capability("MOVE"):
                 c.move(uid, dest)
             else:
@@ -479,6 +494,23 @@ class ImapBackend(DraftingBackend, ArchivingBackend):
             return f"Message archivé vers {dest}"
         finally:
             c.logout()
+
+    def _gmail_archive(self, c: WriteIMAP, folder: str, uid: str, all_mail: str) -> None:
+        """Chez Gmail, retirer un message d'INBOX l'archive tant qu'il reste dans Tous les
+        messages. On le vérifie avant, et on refuse si un autre message d'INBOX est déjà
+        marqué \\Deleted (rien d'autre ne doit partir avec lui)."""
+        msgid = c.gmail_msgid(uid)
+        if not c.exists_in(all_mail, msgid):
+            raise RuntimeError("Message absent de Tous les messages : archivage refusé")
+        c.select(folder)
+        if c.others_flagged_deleted(uid):
+            raise RuntimeError(f"Des messages de {folder} sont déjà marqués supprimés : archivage refusé")
+        c.remove_from_selected(uid)
+        if c.in_selected_folder(uid):
+            raise RuntimeError(
+                f"Gmail a accepté la commande mais le message est toujours dans {folder} : "
+                "archivage non effectué"
+            )
 
 
 def _safe_date(msg: EmailMessage):

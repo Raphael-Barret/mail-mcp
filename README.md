@@ -41,8 +41,8 @@ uv run pytest
 
 Activer la validation en deux étapes, puis créer un **mot de passe d'application** sur
 <https://myaccount.google.com/apppasswords>. C'est lui qu'on range dans le Trousseau. Hôte `imap.gmail.com`,
-port 993, `security = "ssl"`. Chez Gmail, archiver retire le libellé Inbox (le message reste dans
-« Tous les messages »).
+port 993, `security = "ssl"`. Chez Gmail, archiver retire le message du dossier INBOX : il reste dans
+« Tous les messages » (vérifié avant de le retirer).
 
 ### Autre serveur IMAP (école, entreprise)
 
@@ -79,8 +79,9 @@ supprimer.
 - **Lecture seule vérifiable.** La connexion de lecture n'ouvre les dossiers qu'avec `EXAMINE` et lit avec
   `BODY.PEEK` : rien n'est marqué comme lu. Elle n'a aucune commande d'écriture, et un test le prouve.
 - **Écriture limitée.** La connexion d'écriture est une classe à part. Elle ne sait faire que : ajouter un
-  brouillon, déplacer un message, retirer le libellé Inbox (Gmail), ou copier puis retirer un seul message
-  quand le serveur n'a pas `MOVE`. Un message n'est jamais détruit. La copie doit réussir avant tout retrait.
+  brouillon, déplacer un message, ou retirer un seul message du dossier courant une fois qu'il existe
+  ailleurs (copie réussie, ou présence vérifiée dans « Tous les messages » chez Gmail). Elle refuse si un
+  autre message du dossier est déjà marqué supprimé. Un message n'est jamais détruit.
 - **Brouillon, jamais envoi.** Un brouillon part dans le dossier Brouillons ; c'est vous qui l'envoyez.
   Les adresses et l'objet sont refusés s'ils contiennent un saut de ligne (injection d'en-têtes).
 - **Contenu non fiable.** Un mail peut contenir des instructions à l'intention de l'assistant. Les sorties de

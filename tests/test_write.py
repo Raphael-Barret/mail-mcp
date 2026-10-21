@@ -165,29 +165,63 @@ def test_write_connection_has_no_destructive_commands():
 
 
 class GmailConn(FakeWriteConn):
-    """Gmail simulé : le message quitte INBOX seulement si `applies` est vrai."""
+    """Gmail simulé. Le message 7 est dans INBOX ; `in_all` dit s'il est aussi dans Tous les messages."""
 
-    def __init__(self, applies=True):
+    def __init__(self, applies=True, in_all=True, other_deleted=()):
         super().__init__(caps=("IMAP4REV1", "X-GM-EXT-1"))
-        self.applies, self.gone = applies, False
+        self.applies, self.in_all, self.other_deleted = applies, in_all, list(other_deleted)
+        self.gone, self.current = False, "INBOX"
+
+    def select(self, folder, readonly=False):
+        self.current = folder.strip('"')
+        return super().select(folder, readonly)
 
     def uid(self, command, *args):
         self.calls.append(("uid", command, args))
+        if command == "FETCH":
+            return "OK", [b"3 (X-GM-MSGID 999 UID 7)"]
         if command == "STORE" and self.applies:
             self.gone = True
+        if command == "SEARCH" and args[0] == "X-GM-MSGID":
+            return "OK", [b"7" if self.in_all else b""]
+        if command == "SEARCH" and args[0] == "DELETED":
+            return "OK", [" ".join(self.other_deleted).encode()]
         if command == "SEARCH":
             return "OK", [b"" if self.gone else b"7"]
         return "OK", [b""]
 
 
-def test_archive_gmail_removes_inbox_label_only(monkeypatch):
+def _gmail_cmds(conn):
+    return [c[1] for c in conn.calls if c[0] == "uid"]
+
+
+def test_archive_gmail_removes_message_from_inbox_after_checking_all_mail(monkeypatch):
     conn = GmailConn()
     b, _ = make(monkeypatch, conn=conn)
     b.archive("INBOX|42|7")
-    assert [c[1] for c in conn.calls if c[0] == "uid"] == ["STORE", "SEARCH"]
-    assert [c for c in conn.calls if c[:2] == ("uid", "STORE")][0][2] == ("7", "-X-GM-LABELS", "(\\Inbox)")
+    assert _gmail_cmds(conn) == ["FETCH", "SEARCH", "SEARCH", "STORE", "EXPUNGE", "SEARCH"]
+    assert ("select", '"[Gmail]/Tous les messages"', True) in conn.calls  # vérifié en lecture seule
+    store = [c for c in conn.calls if c[:2] == ("uid", "STORE")][0]
+    assert store[2] == ("7", "+FLAGS.SILENT", "(\\Deleted)")
+    assert [c for c in conn.calls if c[:2] == ("uid", "EXPUNGE")][0][2] == ("7",)  # cet UID seulement
     with pytest.raises(ValueError, match="INBOX"):
         b.archive("[Gmail]/Spam|42|7")
+
+
+def test_archive_gmail_refuses_if_not_kept_in_all_mail(monkeypatch):
+    conn = GmailConn(in_all=False)
+    b, _ = make(monkeypatch, conn=conn)
+    with pytest.raises(RuntimeError, match="absent de Tous les messages"):
+        b.archive("INBOX|42|7")
+    assert "STORE" not in _gmail_cmds(conn) and "EXPUNGE" not in _gmail_cmds(conn)
+
+
+def test_archive_gmail_refuses_if_other_messages_already_flagged_deleted(monkeypatch):
+    conn = GmailConn(other_deleted=["9"])
+    b, _ = make(monkeypatch, conn=conn)
+    with pytest.raises(RuntimeError, match="déjà marqués"):
+        b.archive("INBOX|42|7")
+    assert "STORE" not in _gmail_cmds(conn) and "EXPUNGE" not in _gmail_cmds(conn)
 
 
 def test_archive_gmail_fails_loudly_if_message_stays_in_inbox(monkeypatch):
