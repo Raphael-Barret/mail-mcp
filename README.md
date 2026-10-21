@@ -125,9 +125,12 @@ supprimer.
 
 - **Microsoft 365 et Google Workspace sans mot de passe IMAP** : non supportés (OAuth requis). Les backends
   Gmail API et Graph sont prévus, pas écrits.
-- **Vérifié en réel** : lecture, recherche, brouillon et archivage Gmail sur Gmail ; lecture et brouillon sur un
+- **Vérifié en réel** : lecture, recherche, brouillon et archivage sur Gmail ; lecture et brouillon sur un
   serveur d'école. Le chemin d'archivage pour un serveur sans `MOVE` (copie puis retrait) n'est couvert que
   par des tests avec fausse connexion IMAP.
+- **Systèmes** : macOS utilisé au quotidien. Linux : tests et démarrage du serveur MCP vérifiés dans un conteneur
+  (Python 3.11, 3.12, 3.13), mais sans comptes réels ni trousseau graphique. Windows : couvert par la CI
+  (`.github/workflows/ci.yml`), jamais essayé avec un vrai compte.
 - **Recherche** : texte intégral (`TEXT`), floue chez Gmail ; pas de syntaxe de recherche propre à Gmail.
 - **Fils de discussion** : reconstitués dans le dossier courant seulement.
 - **Brouillons** : texte brut, sans pièce jointe. Pas d'envoi ni de suppression, par choix.
