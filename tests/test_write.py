@@ -164,14 +164,36 @@ def test_write_connection_has_no_destructive_commands():
         assert not hasattr(w, name)
 
 
+class GmailConn(FakeWriteConn):
+    """Gmail simulé : le message quitte INBOX seulement si `applies` est vrai."""
+
+    def __init__(self, applies=True):
+        super().__init__(caps=("IMAP4REV1", "X-GM-EXT-1"))
+        self.applies, self.gone = applies, False
+
+    def uid(self, command, *args):
+        self.calls.append(("uid", command, args))
+        if command == "STORE" and self.applies:
+            self.gone = True
+        if command == "SEARCH":
+            return "OK", [b"" if self.gone else b"7"]
+        return "OK", [b""]
+
+
 def test_archive_gmail_removes_inbox_label_only(monkeypatch):
-    conn = FakeWriteConn(caps=("IMAP4REV1", "X-GM-EXT-1"))
+    conn = GmailConn()
     b, _ = make(monkeypatch, conn=conn)
     b.archive("INBOX|42|7")
-    uids = [c for c in conn.calls if c[0] == "uid"]
-    assert uids == [("uid", "STORE", ("7", "-X-GM-LABELS", "(\\Inbox)"))]
+    assert [c[1] for c in conn.calls if c[0] == "uid"] == ["STORE", "SEARCH"]
+    assert [c for c in conn.calls if c[:2] == ("uid", "STORE")][0][2] == ("7", "-X-GM-LABELS", "(\\Inbox)")
     with pytest.raises(ValueError, match="INBOX"):
         b.archive("[Gmail]/Spam|42|7")
+
+
+def test_archive_gmail_fails_loudly_if_message_stays_in_inbox(monkeypatch):
+    b, _ = make(monkeypatch, conn=GmailConn(applies=False))
+    with pytest.raises(RuntimeError, match="non effectué"):
+        b.archive("INBOX|42|7")
 
 
 def test_archive_without_move_copies_then_expunges_that_uid(monkeypatch):

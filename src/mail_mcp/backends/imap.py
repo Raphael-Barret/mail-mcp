@@ -118,6 +118,10 @@ class WriteIMAP:
         if typ != "OK":
             raise RuntimeError(f"Retrait du libellé Inbox refusé : {data}")
 
+    def in_selected_folder(self, uid: str) -> bool:
+        typ, data = self._c.uid("SEARCH", "UID", uid)
+        return typ == "OK" and bool(data and data[0])
+
     def copy_and_expunge(self, uid: str, dest: str) -> None:
         """Sans MOVE : copie, puis retire CE message seulement (UID EXPUNGE, d'où UIDPLUS).
         La copie doit avoir réussi avant tout retrait."""
@@ -462,6 +466,11 @@ class ImapBackend(DraftingBackend, ArchivingBackend):
                 raise LookupError("Identifiant périmé (UIDVALIDITY a changé), relister le dossier")
             if gmail:
                 c.remove_inbox_label(uid)
+                if c.in_selected_folder(uid):
+                    raise RuntimeError(
+                        f"Gmail a accepté la commande mais le message est toujours dans {folder} : "
+                        "archivage non effectué"
+                    )
                 return "Message archivé (libellé Inbox retiré, conservé dans Tous les messages)"
             if c.has_capability("MOVE"):
                 c.move(uid, dest)
