@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Données personnelles : jamais versionnées
+.env
+.env.*
+!.env.example
+config.toml
+*.local.toml
+BRIEF.md
+NOTES.md

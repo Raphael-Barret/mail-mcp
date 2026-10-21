@@ -1,0 +1,21 @@
+# Copier vers ~/.config/mail-mcp/config.toml
+# Les secrets ne vont jamais ici : ils sont lus dans le Trousseau macOS
+# (service "mail-mcp", identifiant = nom du compte).
+# Les comptes sont en lecture seule sauf `write_enabled = true`.
+
+[accounts.gmail]
+backend = "imap"
+host = "imap.gmail.com"
+port = 993
+security = "ssl"
+username = "you@gmail.com"
+
+# [accounts.school]
+# backend = "imap"
+# host = "..."        # à remplir avec les paramètres du client mail
+# port = 993
+# security = "ssl"    # ssl | starttls
+# username = "..."
+
+# [accounts.unc]
+# backend = "graph"   # étape 5
