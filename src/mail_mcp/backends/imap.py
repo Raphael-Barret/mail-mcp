@@ -46,7 +46,15 @@ class ReadOnlyIMAP:
         return self._c.uid(command, *args)
 
     def search(self, *criteria: str | bytes) -> list[bytes]:
-        typ, data = self._c.uid("SEARCH", "CHARSET", "UTF-8", *criteria)
+        """Recherche par UID. Un dernier critère `bytes` part en littéral IMAP,
+        seul moyen sûr d'envoyer du texte libre (espaces, accents, guillemets)."""
+        args = list(criteria)
+        if args and isinstance(args[-1], bytes):
+            self._c.literal = args.pop()
+        try:
+            typ, data = self._c.uid("SEARCH", "CHARSET", "UTF-8", *args)
+        finally:
+            self._c.literal = None
         if typ != "OK":
             raise RuntimeError("Recherche IMAP refusée")
         return data[0].split() if data and data[0] else []
@@ -265,7 +273,7 @@ class ImapBackend(MailBackend):
             found: set[str] = {uid}
             for mid in ids:
                 for header in ("MESSAGE-ID", "REFERENCES"):
-                    found.update(u.decode() for u in c.search("HEADER", header, mid))
+                    found.update(u.decode() for u in c.search("HEADER", header, _quote(mid)))
             ordered = sorted(found, key=int)
             return [self._fetch_full(c, folder, u) for u in ordered]
         finally:

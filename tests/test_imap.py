@@ -37,6 +37,8 @@ class FakeConn:
             data += [(head, RAW), b")"]
         return "OK", data
 
+    literal = None
+
     def logout(self):
         self.calls.append(("logout",))
 
@@ -104,3 +106,20 @@ def test_parse_fetch_merges_split_literals():
     ]
     (uid, flags, raw), = imap_mod._parse_fetch(data)
     assert (uid, flags, raw) == ("9", {"\\Seen"}, RAW)
+
+
+def test_search_sends_free_text_as_literal(backend):
+    b, conn = backend
+    seen = {}
+    real_uid = conn.uid
+
+    def spy(command, *args):
+        if command == "SEARCH":
+            seen["literal"], seen["args"] = conn.literal, args
+        return real_uid(command, *args)
+
+    conn.uid = spy
+    b.search("café crème")
+    assert seen["literal"] == "café crème".encode()
+    assert seen["args"] == ("CHARSET", "UTF-8", "TEXT")
+    assert conn.literal is None  # remis à zéro après l'appel
