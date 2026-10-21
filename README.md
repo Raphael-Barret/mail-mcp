@@ -212,9 +212,11 @@ Every write call re-checks the configuration of the targeted account. There is n
 - **Verified against real accounts**: reading, searching, drafting and archiving on Gmail; reading and drafting
   on a school server. The archiving path for a server without `MOVE` (copy, then removal) is covered only by
   tests with a fake IMAP connection.
-- **Systems**: macOS is used daily. Linux: tests and MCP server startup verified in a container (Python 3.11,
-  3.12, 3.13), but with no real accounts and no graphical keychain. Windows: covered by CI
-  (`.github/workflows/ci.yml`), never tried with a real account.
+- **Systems**: macOS is used daily. CI (`.github/workflows/ci.yml`) runs the tests on Ubuntu, Windows and macOS
+  with Python 3.11, 3.12 and 3.13, starts the real MCP server over stdio on each, and on Windows stores and
+  reads back a secret in the real Credential Manager. Linux was also checked in a container, including a
+  headless keyring. Not done on Windows and Linux: a session with a real mail account, and the install steps
+  run by hand from this README.
 - **Search**: full text (`TEXT`), fuzzy on Gmail; no Gmail-specific search syntax.
 - **Threads**: rebuilt within the current folder only.
 - **Drafts**: plain text, no attachments. No sending and no deletion, by design.

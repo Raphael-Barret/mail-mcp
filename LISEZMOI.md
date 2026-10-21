@@ -218,9 +218,11 @@ supprimer.
 - **Vérifié en réel** : lecture, recherche, brouillon et archivage sur Gmail ; lecture et brouillon sur un
   serveur d'école. Le chemin d'archivage pour un serveur sans `MOVE` (copie puis retrait) n'est couvert que
   par des tests avec fausse connexion IMAP.
-- **Systèmes** : macOS utilisé au quotidien. Linux : tests et démarrage du serveur MCP vérifiés dans un conteneur
-  (Python 3.11, 3.12, 3.13), mais sans comptes réels ni trousseau graphique. Windows : couvert par la CI
-  (`.github/workflows/ci.yml`), jamais essayé avec un vrai compte.
+- **Systèmes** : macOS est utilisé au quotidien. La CI (`.github/workflows/ci.yml`) lance les tests sur Ubuntu,
+  Windows et macOS avec Python 3.11, 3.12 et 3.13, démarre le vrai serveur MCP sur stdio sur chacun, et sous
+  Windows range puis relit un secret dans le vrai Gestionnaire d'identifiants. Linux a aussi été vérifié dans un
+  conteneur, trousseau sans interface compris. Pas fait sous Windows ni Linux : une session avec un vrai compte
+  mail, et les étapes d'installation exécutées à la main depuis ce README.
 - **Recherche** : texte intégral (`TEXT`), floue chez Gmail ; pas de syntaxe de recherche propre à Gmail.
 - **Fils de discussion** : reconstitués dans le dossier courant seulement.
 - **Brouillons** : texte brut, sans pièce jointe. Pas d'envoi ni de suppression, par choix.
