@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from mcp.server.mcpserver import MCPServer
 
-from .backends import MailBackend
+from .backends import ArchivingBackend, DraftingBackend, MailBackend
 from .backends import imap as _imap  # noqa: F401  (enregistre le backend)
 from .config import AccountConfig, load_accounts
 from .registry import build_backend
@@ -33,7 +33,7 @@ def create_server(accounts: dict[str, AccountConfig]) -> MCPServer:
     def list_accounts() -> list[dict]:
         """Liste les comptes configurés et s'ils autorisent l'écriture."""
         return [
-            {"account": a.name, "backend": a.backend, "write_enabled": a.write_enabled}
+            {"account": a.name, "backend": a.backend, "allow": list(a.allow)}
             for a in accounts.values()
         ]
 
@@ -61,9 +61,44 @@ def create_server(accounts: dict[str, AccountConfig]) -> MCPServer:
         """Lit le fil de discussion d'un message."""
         return wrap_untrusted([m.to_dict() for m in backend(account).get_thread(message_id)])
 
-    # Aucun outil d'écriture n'est enregistré à ce stade. Quand un backend
-    # WritableBackend existera, ses outils ne seront ajoutés ici que pour les
-    # comptes avec write_enabled = true dans la configuration.
+    def writable(account: str, capability: str) -> MailBackend:
+        """Contrôle à chaque appel, depuis la config : aucun argument d'outil n'y change rien."""
+        if account not in accounts:
+            raise ValueError(f"Compte inconnu '{account}'. Comptes : {sorted(accounts)}")
+        if capability not in accounts[account].allow:
+            raise PermissionError(
+                f"Capacité '{capability}' non autorisée sur le compte '{account}' (config `allow`)"
+            )
+        return backend(account)
+
+    # Les outils d'écriture n'existent que si au moins un compte les autorise.
+    if any("draft" in a.allow for a in accounts.values()):
+
+        @mcp.tool()
+        def create_draft(
+            account: str,
+            to: list[str],
+            subject: str,
+            body: str,
+            cc: list[str] | None = None,
+            reply_to_message_id: str | None = None,
+        ) -> str:
+            """Crée un brouillon (texte brut), sans l'envoyer. Pour répondre, passer
+            l'id du message : destinataire, objet et en-têtes de fil sont repris."""
+            b = writable(account, "draft")
+            if not isinstance(b, DraftingBackend):
+                raise NotImplementedError(f"Le backend de '{account}' ne sait pas créer de brouillon")
+            return b.create_draft(to, subject, body, cc, reply_to_message_id)
+
+    if any("archive" in a.allow for a in accounts.values()):
+
+        @mcp.tool()
+        def archive_message(account: str, message_id: str) -> str:
+            """Archive un message (le sort de la boîte de réception, sans le supprimer)."""
+            b = writable(account, "archive")
+            if not isinstance(b, ArchivingBackend):
+                raise NotImplementedError(f"Le backend de '{account}' ne sait pas archiver")
+            return b.archive(message_id)
 
     return mcp
 

@@ -1,3 +1,3 @@
-from .base import MailBackend, WritableBackend
+from .base import ArchivingBackend, DraftingBackend, MailBackend
 
-__all__ = ["MailBackend", "WritableBackend"]
+__all__ = ["ArchivingBackend", "DraftingBackend", "MailBackend"]

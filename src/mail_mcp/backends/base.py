@@ -25,22 +25,27 @@ class MailBackend(ABC):
     def get_thread(self, message_id: str) -> list[MessageBody]: ...
 
 
-class WritableBackend(MailBackend):
-    """Capacité d'écriture, distincte de la lecture.
-
-    Un backend ne l'implémente que s'il sait écrire, et le serveur n'expose les
-    outils correspondants que pour les comptes dont la configuration active
-    `write_enabled`. Jamais par un argument d'outil.
-    """
+class DraftingBackend(MailBackend):
+    """Capacité `draft` : écrire un brouillon, jamais l'envoyer."""
 
     @abstractmethod
-    def send(self, to: list[str], subject: str, body: str) -> str: ...
+    def create_draft(
+        self,
+        to: list[str],
+        subject: str,
+        body: str,
+        cc: list[str] | None = None,
+        reply_to_message_id: str | None = None,
+    ) -> str: ...
+
+
+class ArchivingBackend(MailBackend):
+    """Capacité `archive` : sortir un message de la boîte de réception, sans le détruire."""
 
     @abstractmethod
-    def reply(self, message_id: str, body: str) -> str: ...
+    def archive(self, message_id: str) -> str: ...
 
-    @abstractmethod
-    def archive(self, message_id: str) -> None: ...
 
-    @abstractmethod
-    def delete(self, message_id: str) -> None: ...
+# Capacités d'écriture : chacune est une interface distincte, activée par compte
+# dans la configuration (`allow`), jamais par un argument d'outil. `send` et
+# `delete` viendront plus tard sur le même modèle.

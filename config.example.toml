@@ -1,21 +1,25 @@
-# Copier vers ~/.config/mail-mcp/config.toml
+# Copier vers ~/.config/mail-mcp/config.toml (ou pointer MAIL_MCP_CONFIG dessus).
 # Les secrets ne vont jamais ici : ils sont lus dans le Trousseau macOS
 # (service "mail-mcp", identifiant = nom du compte).
-# Les comptes sont en lecture seule sauf `write_enabled = true`.
+#
+# Tous les comptes sont en lecture seule. Pour autoriser des écritures, lister
+# les capacités voulues dans `allow` (permises : "draft", "archive").
 
 [accounts.gmail]
 backend = "imap"
 host = "imap.gmail.com"
 port = 993
-security = "ssl"
+security = "ssl"            # ssl | starttls
 username = "you@gmail.com"
+allow = ["draft", "archive"]   # optionnel
 
-# [accounts.school]
-# backend = "imap"
-# host = "..."        # à remplir avec les paramètres du client mail
-# port = 993
-# security = "ssl"    # ssl | starttls
-# username = "..."
-
-# [accounts.unc]
-# backend = "graph"   # étape 5
+[accounts.school]
+backend = "imap"
+host = "imap.example.edu"
+port = 993
+security = "ssl"
+username = "you@example.edu"
+allow = ["draft"]
+# address = "you@example.edu"     # expéditeur des brouillons si différent de username
+# drafts_folder = "Drafts"        # sinon détecté (attribut \Drafts ou nom usuel)
+# archive_folder = "Archive"      # requis si le serveur n'a pas de dossier d'archive reconnu
