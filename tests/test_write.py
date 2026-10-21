@@ -29,10 +29,13 @@ class FakeWriteConn:
 
     def select(self, folder, readonly=False):
         self.calls.append(("select", folder, readonly))
+        self._uv = b"42"
         return "OK", [b"3"]
 
     def response(self, name):
-        return name, [b"42"]
+        # comme imaplib : la valeur n'est rendue qu'une fois, puis effacée
+        value, self._uv = self._uv, None
+        return name, [value]
 
     def append(self, folder, flags, date, raw):
         self.calls.append(("append", folder, flags, raw))
@@ -260,3 +263,31 @@ def test_failed_copy_never_removes_the_message(monkeypatch):
     with pytest.raises(RuntimeError):
         b.archive("INBOX|42|7")
     assert [c[1] for c in conn.calls if c[0] == "uid"] == ["COPY"]
+
+
+# -- régression : UIDVALIDITY lu deux fois (imaplib l'efface après la première lecture) --
+from test_imap import FakeConn  # noqa: E402
+from mail_mcp.backends.imap import ReadOnlyIMAP  # noqa: E402
+
+
+def test_ids_from_read_message_and_thread_carry_the_real_uidvalidity(monkeypatch):
+    b = ImapBackend(AccountConfig(name="t", backend="imap", host="h", username="me@example.com"))
+    monkeypatch.setattr(b, "_connect", lambda: ReadOnlyIMAP(FakeConn()))
+    assert b.get_message("INBOX|42|1").summary.id == "INBOX|42|1"
+    assert {m.summary.id.split("|")[1] for m in b.get_thread("INBOX|42|1")} == {"42"}
+
+
+def test_reply_draft_accepts_an_id_returned_by_read_message(monkeypatch):
+    b, wconn = make(monkeypatch)
+    monkeypatch.setattr(b, "_connect", lambda: ReadOnlyIMAP(FakeConn()))
+    msg_id = b.get_message("INBOX|42|1").summary.id
+    b.create_draft(["bob@example.com"], "Re: Café", "Merci", reply_to_message_id=msg_id)
+    assert [c for c in wconn.calls if c[0] == "append"]
+
+
+def test_archive_accepts_an_id_returned_by_read_message(monkeypatch):
+    b, wconn = make(monkeypatch)
+    monkeypatch.setattr(b, "_connect", lambda: ReadOnlyIMAP(FakeConn()))
+    msg_id = b.get_message("INBOX|42|1").summary.id
+    b.archive(msg_id)
+    assert ("uid", "MOVE", ("1", '"[Gmail]/Tous les messages"')) in wconn.calls

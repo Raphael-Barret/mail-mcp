@@ -21,10 +21,13 @@ class FakeConn:
 
     def select(self, folder, readonly=False):
         self.calls.append(("select", folder, readonly))
+        self._uv = b"42"
         return "OK", [b"2"]
 
     def response(self, name):
-        return name, [b"42"]
+        # comme imaplib : la valeur n'est rendue qu'une fois, puis effacée
+        value, self._uv = self._uv, None
+        return name, [value]
 
     def uid(self, command, *args):
         self.calls.append(("uid", command, args))

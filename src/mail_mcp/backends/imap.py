@@ -39,6 +39,7 @@ class ReadOnlyIMAP:
         typ, data = self._c.select(_quote(folder), readonly=True)
         if typ != "OK":
             raise RuntimeError(f"Dossier inaccessible : {folder}")
+        self.uidvalidity = _read_uidvalidity(self._c)
         return int(data[0])
 
     def uid(self, command: str, *args: str):
@@ -84,6 +85,7 @@ class WriteIMAP:
         typ, _ = self._c.select(_quote(folder))
         if typ != "OK":
             raise RuntimeError(f"Dossier inaccessible : {folder}")
+        self.uidvalidity = _read_uidvalidity(self._c)
 
     def has_capability(self, cap: str) -> bool:
         self._c.capability()
@@ -125,6 +127,7 @@ class WriteIMAP:
         typ, _ = self._c.select(_quote(folder), readonly=True)
         if typ != "OK":
             raise RuntimeError(f"Dossier inaccessible : {folder}")
+        self.uidvalidity = _read_uidvalidity(self._c)
         typ, data = self._c.uid("SEARCH", "X-GM-MSGID", msgid)
         return typ == "OK" and bool(data and data[0])
 
@@ -160,6 +163,14 @@ class WriteIMAP:
             self._c.logout()
         except Exception:
             pass
+
+
+def _read_uidvalidity(conn: imaplib.IMAP4) -> str:
+    """À appeler une seule fois, juste après select : imaplib efface la valeur dès qu'on la lit."""
+    _, data = conn.response("UIDVALIDITY")
+    if not data or not data[0]:
+        raise RuntimeError("Le serveur n'a pas annoncé UIDVALIDITY : identifiants de message non sûrs")
+    return data[0].decode()
 
 
 def _quote(folder: str) -> str:
@@ -317,9 +328,9 @@ class ImapBackend(DraftingBackend, ArchivingBackend):
             snippet=_body_text(msg)[:SNIPPET_LEN].replace("\n", " "),
         )
 
-    def _uidvalidity(self, c: ReadOnlyIMAP) -> str:
-        typ, data = c._c.response("UIDVALIDITY")
-        return data[0].decode() if data and data[0] else "0"
+    def _uidvalidity(self, c: ReadOnlyIMAP | WriteIMAP) -> str:
+        """UIDVALIDITY du dossier ouvert, lu une fois à l'ouverture (voir _read_uidvalidity)."""
+        return c.uidvalidity
 
     def _recent(self, c: ReadOnlyIMAP, folder: str, uids: list[bytes], limit: int):
         chosen = [u.decode() for u in uids[-limit:]][::-1]  # plus récents d'abord
