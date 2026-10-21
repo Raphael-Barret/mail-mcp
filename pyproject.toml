@@ -2,6 +2,9 @@
 name = "mail-mcp"
 version = "0.1.0"
 description = "Serveur MCP mail multi-comptes, lecture seule par défaut"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = ["mcp>=2", "keyring>=25"]
 
