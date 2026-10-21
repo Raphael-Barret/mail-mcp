@@ -17,8 +17,39 @@ Microsoft Graph (see [Known limitations](#known-limitations)).
 
 ## Installation
 
-Requirements: [uv](https://docs.astral.sh/uv/) and Python 3.11 or later. macOS, Linux and Windows are targeted;
-see [Known limitations](#known-limitations) for what has actually been verified.
+Steps 1, 3 and 5 differ by system; the others are identical everywhere. Commands labelled **Windows** are for
+PowerShell.
+
+### 1. Install the prerequisites
+
+You need [Git](https://git-scm.com) and [uv](https://docs.astral.sh/uv/). You do not have to install Python
+yourself: uv downloads a suitable version (3.11 or later) when it is needed.
+
+**macOS** (with [Homebrew](https://brew.sh)):
+
+```
+brew install git uv
+```
+
+**Linux**: install git with your package manager (`sudo apt install git`, `sudo dnf install git`, ...), then uv:
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows**:
+
+```
+winget install --id Git.Git -e
+winget install --id astral-sh.uv -e
+```
+
+Close and reopen PowerShell afterwards so that `git` and `uv` are found. Check with `git --version` and
+`uv --version`.
+
+### 2. Get the code and run the tests
+
+Same on every system:
 
 ```
 git clone https://github.com/Raphael-Barret/mail-mcp.git
@@ -27,30 +58,79 @@ uv sync
 uv run pytest
 ```
 
-## Configuration
+All tests should pass. They use no real account.
 
-1. Copy `config.example.toml` to the configuration file (or set `MAIL_MCP_CONFIG`) and describe your accounts.
-   One `[accounts.<name>]` entry is enough to add an account. Default location:
+### 3. Create the configuration file
 
-   | System | File |
-   |---|---|
-   | macOS, Linux | `$XDG_CONFIG_HOME/mail-mcp/config.toml`, otherwise `~/.config/mail-mcp/config.toml` |
-   | Windows | `%APPDATA%\mail-mcp\config.toml` |
+The default location depends on the system. Set `MAIL_MCP_CONFIG` to use another path.
 
-2. Store each account's password in the system keychain, typed with no echo (nothing lands in your shell
-   history). The account name is the one used in the configuration:
+**macOS and Linux** (`$XDG_CONFIG_HOME` is honoured if set):
 
-   ```
-   uv run mail-mcp set-secret <account-name>
-   ```
+```
+mkdir -p ~/.config/mail-mcp
+cp config.example.toml ~/.config/mail-mcp/config.toml
+nano ~/.config/mail-mcp/config.toml
+```
 
-   Run it in a real terminal, not inside an assistant session.
-   - **macOS**: Keychain. If you get "User interaction is not allowed", unlock it first:
-     `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
-   - **Windows**: Credential Manager, nothing to install.
-   - **Linux**: a running, unlocked Secret Service (gnome-keyring or KWallet) is required. Without one (a
-     headless server, for instance), storing the secret fails with an explicit message.
-3. Restart the server after every configuration change (it is read at startup).
+**Windows**:
+
+```
+New-Item -ItemType Directory -Force "$env:APPDATA\mail-mcp" | Out-Null
+Copy-Item config.example.toml "$env:APPDATA\mail-mcp\config.toml"
+notepad "$env:APPDATA\mail-mcp\config.toml"
+```
+
+Edit it to describe your accounts (see [Setting up accounts](#setting-up-accounts)). One `[accounts.<name>]`
+entry per account. Passwords never go in this file.
+
+### 4. Store each password in the system keychain
+
+For every account in the configuration, run this in a real terminal (not inside an assistant session). The
+password is typed with no echo, so it never lands in your shell history:
+
+```
+uv run mail-mcp set-secret <account-name>
+```
+
+Where it is stored, and what to know:
+
+- **macOS**: the login Keychain. If you get "User interaction is not allowed", unlock it first with
+  `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
+- **Windows**: Credential Manager. Nothing to install or unlock.
+- **Linux with a desktop session (GNOME, KDE)**: the keyring service normally runs and is unlocked at login.
+- **Linux without a desktop (SSH, server, container)**: there is no keyring service, and `set-secret` fails
+  with an explicit message. Start one in a D-Bus session, from the shell that will also run your assistant
+  (shown for Debian and Ubuntu; this sequence was tested in a container):
+
+  ```
+  sudo apt install gnome-keyring dbus
+  dbus-run-session -- bash
+  eval $(printf '%s' 'choose-a-keyring-password' | gnome-keyring-daemon --unlock --components=secrets)
+  uv run mail-mcp set-secret <account-name>
+  ```
+
+  Keep working in that same shell afterwards, and start Claude Code from it: the server reads the secret
+  through the same D-Bus session.
+
+### 5. Register the server in Claude Code
+
+Run it from inside the `mail-mcp` folder. The command is the same on macOS, Linux and Windows (PowerShell).
+The `user` scope keeps the declaration out of the repository.
+
+```
+claude mcp add --scope user mail -- uv run --directory "$PWD" mail-mcp
+```
+
+(`$PWD` is the current folder in these shells. The folder path is stored as-is, so register again if you move
+the project.)
+
+### 6. Check that it works
+
+Restart Claude Code, then open `/mcp`: `mail` should be listed as connected. Ask the assistant to run
+`list_accounts`, then `list_messages` on one account. After every configuration change, restart the server
+(`/mcp`, or restart Claude Code): the configuration is read at startup.
+
+## Setting up accounts
 
 ### Gmail
 
@@ -67,7 +147,7 @@ the folder in your mail client and name it in `archive_folder`.
 
 ### Adding an account
 
-An account is four lines of configuration and a password in the keychain: no code to write.
+An account is a few lines of configuration and a password in the keychain: no code to write.
 
 ```toml
 [accounts.school]
@@ -82,16 +162,19 @@ This works for any IMAP server that accepts a password (Dovecot, Zimbra, Cyrus, 
 It does **not** work when the organisation is on Microsoft 365 or Google Workspace with password authentication
 turned off: that requires OAuth, which this server does not handle yet.
 
-## Registering in Claude Code
+## Troubleshooting
 
-```
-claude mcp add --scope user mail -- uv run --directory /path/to/mail-mcp mail-mcp
-```
-
-On Windows, give the Windows path of the folder (`C:\path\to\mail-mcp`).
-
-The `user` scope keeps the declaration out of the repository. Restart Claude Code; `/mcp` should then list
-`mail`.
+| Symptom | Cause and fix |
+|---|---|
+| `git` or `uv` not found (Windows) | Close and reopen PowerShell after `winget install`. |
+| `mail` is failed or absent in `/mcp` | Check the server starts: `uv run mail-mcp` in the project folder. If `uv` is not found by Claude Code, register with the full path of `uv` (`which uv`, or `(Get-Command uv).Source` on Windows). |
+| "Config introuvable" | The configuration file is not where the table in step 3 says. Create it, or set `MAIL_MCP_CONFIG`. |
+| "Aucun secret dans le trousseau" | Run `uv run mail-mcp set-secret <account-name>` with exactly the name used in the configuration. |
+| "Trousseau indisponible" (Linux) | No keyring service is running or it is locked: see step 4. |
+| "User interaction is not allowed" (macOS) | The Keychain is locked for this terminal: see step 4. |
+| Gmail refuses the login | 2-step verification must be on, and the password must be an app password, not your Google password. IMAP must be enabled in Gmail settings. |
+| Tools missing or account not listed after a change | The configuration is read at startup: restart the server. |
+| "Identifiant périmé" | The folder changed on the server: list it again to get fresh message ids. |
 
 ## Tools
 

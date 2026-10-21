@@ -17,8 +17,40 @@ un accès à plusieurs boîtes mail, **en lecture seule par défaut**.
 
 ## Installation
 
-Prérequis : [uv](https://docs.astral.sh/uv/) et Python 3.11 ou plus. macOS, Linux et Windows sont visés ;
-voir [Limites connues](#limites-connues) pour ce qui est réellement vérifié.
+Les étapes 1, 3 et 5 diffèrent selon le système, les autres sont identiques partout. Les commandes marquées
+**Windows** sont pour PowerShell.
+
+### 1. Installer les prérequis
+
+Il faut [Git](https://git-scm.com) et [uv](https://docs.astral.sh/uv/). Pas besoin d'installer Python vous-même :
+uv télécharge une version adaptée (3.11 ou plus) quand il en a besoin.
+
+**macOS** (avec [Homebrew](https://brew.sh)) :
+
+```
+brew install git uv
+```
+
+**Linux** : installer git avec le gestionnaire de paquets (`sudo apt install git`, `sudo dnf install git`, ...),
+puis uv :
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows** :
+
+```
+winget install --id Git.Git -e
+winget install --id astral-sh.uv -e
+```
+
+Fermer puis rouvrir PowerShell ensuite pour que `git` et `uv` soient trouvés. Vérifier avec `git --version` et
+`uv --version`.
+
+### 2. Récupérer le code et lancer les tests
+
+Identique sur tous les systèmes :
 
 ```
 git clone https://github.com/Raphael-Barret/mail-mcp.git
@@ -27,30 +59,80 @@ uv sync
 uv run pytest
 ```
 
-## Configuration
+Tous les tests doivent passer. Ils n'utilisent aucun compte réel.
 
-1. Copier `config.example.toml` vers le fichier de configuration (ou définir `MAIL_MCP_CONFIG`) et décrire
-   vos comptes. Une entrée `[accounts.<nom>]` suffit pour ajouter un compte. Emplacement par défaut :
+### 3. Créer le fichier de configuration
 
-   | Système | Fichier |
-   |---|---|
-   | macOS, Linux | `$XDG_CONFIG_HOME/mail-mcp/config.toml`, sinon `~/.config/mail-mcp/config.toml` |
-   | Windows | `%APPDATA%\mail-mcp\config.toml` |
+L'emplacement par défaut dépend du système. Définir `MAIL_MCP_CONFIG` pour en utiliser un autre.
 
-2. Ranger le mot de passe de chaque compte dans le trousseau du système, avec une saisie masquée (rien dans
-   l'historique du shell), le nom du compte étant celui de la configuration :
+**macOS et Linux** (`$XDG_CONFIG_HOME` est respecté s'il est défini) :
 
-   ```
-   uv run mail-mcp set-secret <nom-du-compte>
-   ```
+```
+mkdir -p ~/.config/mail-mcp
+cp config.example.toml ~/.config/mail-mcp/config.toml
+nano ~/.config/mail-mcp/config.toml
+```
 
-   À lancer dans un vrai terminal, pas dans une session d'assistant.
-   - **macOS** : Keychain. Si l'erreur « User interaction is not allowed » apparaît, déverrouiller d'abord :
-     `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
-   - **Windows** : Credential Manager, rien à installer.
-   - **Linux** : il faut un service Secret Service actif et déverrouillé (gnome-keyring ou KWallet). Sans lui
-     (serveur sans interface graphique), l'enregistrement échoue avec un message explicite.
-3. Redémarrer le serveur après chaque changement de configuration (elle est lue au démarrage).
+**Windows** :
+
+```
+New-Item -ItemType Directory -Force "$env:APPDATA\mail-mcp" | Out-Null
+Copy-Item config.example.toml "$env:APPDATA\mail-mcp\config.toml"
+notepad "$env:APPDATA\mail-mcp\config.toml"
+```
+
+L'éditer pour décrire vos comptes (voir [Configurer les comptes](#configurer-les-comptes)). Une entrée
+`[accounts.<nom>]` par compte. Les mots de passe ne vont jamais dans ce fichier.
+
+### 4. Ranger chaque mot de passe dans le trousseau du système
+
+Pour chaque compte de la configuration, lancer ceci dans un vrai terminal (pas dans une session d'assistant).
+Le mot de passe est saisi sans écho, il ne finit donc pas dans l'historique du shell :
+
+```
+uv run mail-mcp set-secret <nom-du-compte>
+```
+
+Où il est rangé, et ce qu'il faut savoir :
+
+- **macOS** : le trousseau de session. Si « User interaction is not allowed » apparaît, le déverrouiller d'abord
+  avec `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
+- **Windows** : le Gestionnaire d'identifiants (Credential Manager). Rien à installer ni à déverrouiller.
+- **Linux avec session de bureau (GNOME, KDE)** : le service de trousseau tourne normalement et est déverrouillé
+  à l'ouverture de session.
+- **Linux sans bureau (SSH, serveur, conteneur)** : il n'y a pas de service de trousseau, et `set-secret` échoue
+  avec un message explicite. Il faut en démarrer un dans une session D-Bus, depuis le shell qui lancera aussi
+  votre assistant (exemple Debian et Ubuntu ; cette séquence a été testée dans un conteneur) :
+
+  ```
+  sudo apt install gnome-keyring dbus
+  dbus-run-session -- bash
+  eval $(printf '%s' 'choisir-un-mot-de-passe-de-trousseau' | gnome-keyring-daemon --unlock --components=secrets)
+  uv run mail-mcp set-secret <nom-du-compte>
+  ```
+
+  Continuer ensuite dans ce même shell et y lancer Claude Code : le serveur lit le secret par la même session
+  D-Bus.
+
+### 5. Enregistrer le serveur dans Claude Code
+
+À lancer depuis le dossier `mail-mcp`. La commande est la même sur macOS, Linux et Windows (PowerShell).
+La portée `user` garde la déclaration hors du dépôt.
+
+```
+claude mcp add --scope user mail -- uv run --directory "$PWD" mail-mcp
+```
+
+(`$PWD` est le dossier courant dans ces shells. Le chemin est enregistré tel quel : refaire l'enregistrement
+si le projet est déplacé.)
+
+### 6. Vérifier que ça marche
+
+Relancer Claude Code, puis ouvrir `/mcp` : `mail` doit apparaître comme connecté. Demander à l'assistant
+d'exécuter `list_accounts`, puis `list_messages` sur un compte. Après chaque changement de configuration,
+redémarrer le serveur (`/mcp`, ou relancer Claude Code) : la configuration est lue au démarrage.
+
+## Configurer les comptes
 
 ### Gmail
 
@@ -68,7 +150,7 @@ d'archive reconnu, créer le dossier dans votre client et le nommer dans `archiv
 
 ### Ajouter un compte
 
-Un compte, c'est quatre lignes de configuration et un mot de passe dans le trousseau : aucun code à écrire.
+Un compte, c'est quelques lignes de configuration et un mot de passe dans le trousseau : aucun code à écrire.
 
 ```toml
 [accounts.ecole]
@@ -83,15 +165,19 @@ username = "prenom.nom@exemple.edu"
 d'entreprise). Ça ne marche **pas** quand l'établissement est sur Microsoft 365 ou Google Workspace avec
 l'authentification par mot de passe désactivée : il faut alors OAuth, que ce serveur ne gère pas encore.
 
-## Enregistrement dans Claude Code
+## Dépannage
 
-```
-claude mcp add --scope user mail -- uv run --directory /chemin/vers/mail-mcp mail-mcp
-```
-
-Sous Windows, donner le chemin Windows du dossier (`C:\chemin\vers\mail-mcp`).
-
-La portée `user` garde la déclaration hors du dépôt. Relancer Claude Code, puis `/mcp` doit montrer `mail`.
+| Symptôme | Cause et correction |
+|---|---|
+| `git` ou `uv` introuvable (Windows) | Fermer et rouvrir PowerShell après `winget install`. |
+| `mail` en échec ou absent dans `/mcp` | Vérifier que le serveur démarre : `uv run mail-mcp` dans le dossier du projet. Si Claude Code ne trouve pas `uv`, enregistrer avec le chemin complet de `uv` (`which uv`, ou `(Get-Command uv).Source` sous Windows). |
+| « Config introuvable » | Le fichier de configuration n'est pas où l'indique le tableau de l'étape 3. Le créer, ou définir `MAIL_MCP_CONFIG`. |
+| « Aucun secret dans le trousseau » | Lancer `uv run mail-mcp set-secret <nom-du-compte>` avec exactement le nom de la configuration. |
+| « Trousseau indisponible » (Linux) | Aucun service de trousseau ne tourne, ou il est verrouillé : voir l'étape 4. |
+| « User interaction is not allowed » (macOS) | Le trousseau est verrouillé pour ce terminal : voir l'étape 4. |
+| Gmail refuse la connexion | La validation en deux étapes doit être active et le mot de passe doit être un mot de passe d'application, pas celui de votre compte Google. L'IMAP doit être activé dans les paramètres Gmail. |
+| Outils absents ou compte non listé après un changement | La configuration est lue au démarrage : redémarrer le serveur. |
+| « Identifiant périmé » | Le dossier a changé sur le serveur : le relister pour obtenir des identifiants frais. |
 
 ## Outils
 
